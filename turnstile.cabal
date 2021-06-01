@@ -1,0 +1,120 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: c8cd6357da9ffd4f5099a40023d346c7e1c882c1f705f2352c73cbb5a1ebd4a0
+
+name:           turnstile
+version:        0.1.0.0
+synopsis:       A distributed CI server environment
+description:    Please see the README on GitHub at <https://github.com/MatthewZito/turnstile#readme>
+category:       Web, CI/CD
+homepage:       https://github.com/MatthewZito/turnstile#readme
+bug-reports:    https://github.com/MatthewZito/turnstile/issues
+author:         Matthew Zito (goldmund)
+maintainer:     exbotanical@gmail.com
+copyright:      MIT
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/MatthewZito/turnstile
+
+library
+  exposed-modules:
+      Core
+  other-modules:
+      Paths_turnstile
+  hs-source-dirs:
+      src
+  default-extensions: BlockArguments DeriveAnyClass DeriveGeneric LambdaCase NoImplicitPrelude OverloadedStrings StrictData
+  ghc-options: -F -pgmF=record-dot-preprocessor -fwarn-tabs -fwarn-unused-imports
+  build-depends:
+      aeson
+    , async
+    , base
+    , butcher
+    , hslogger
+    , http-client
+    , http-conduit
+    , http-types
+    , network
+    , record-hasfield
+    , rio
+    , scotty
+    , serialise
+    , stm
+    , time
+    , typed-process
+    , wai-cors
+    , yaml
+  default-language: Haskell2010
+
+executable turnstile
+  main-is: Main.hs
+  other-modules:
+      Paths_turnstile
+  hs-source-dirs:
+      app
+  default-extensions: BlockArguments DeriveAnyClass DeriveGeneric LambdaCase NoImplicitPrelude OverloadedStrings StrictData
+  ghc-options: -F -pgmF=record-dot-preprocessor -fwarn-tabs -fwarn-unused-imports -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , async
+    , base
+    , butcher
+    , hslogger
+    , http-client
+    , http-conduit
+    , http-types
+    , network
+    , record-hasfield
+    , rio
+    , scotty
+    , serialise
+    , stm
+    , time
+    , turnstile
+    , typed-process
+    , wai-cors
+    , yaml
+  default-language: Haskell2010
+
+test-suite turnstile-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_turnstile
+  hs-source-dirs:
+      test
+  default-extensions: BlockArguments DeriveAnyClass DeriveGeneric LambdaCase NoImplicitPrelude OverloadedStrings StrictData
+  ghc-options: -F -pgmF=record-dot-preprocessor -fwarn-tabs -fwarn-unused-imports -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , async
+    , base
+    , butcher
+    , hslogger
+    , hspec
+    , http-client
+    , http-conduit
+    , http-types
+    , network
+    , record-hasfield
+    , rio
+    , scotty
+    , serialise
+    , stm
+    , time
+    , turnstile
+    , typed-process
+    , wai-cors
+    , yaml
+  default-language: Haskell2010
