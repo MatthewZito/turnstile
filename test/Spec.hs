@@ -1,6 +1,8 @@
-module Spec where
+module Main where
 
 import RIO
+import Test.Hspec
+import qualified RIO.Map as Map
 import qualified RIO.NonEmpty.Partial as Partial
 
 import Core
@@ -38,5 +40,28 @@ testBuild = Build
     , completedSteps = mempty
   }
 
+runBuild :: Docker.Service -> Build -> IO Build
+runBuild docker build = do
+  newBuild <- Core.progress docker build
+  case newBuild.state of
+    BuildFinished _ ->
+      pure newBuild
+    _ -> do
+      -- recurse until we've reached a `BuildFinished` state
+      threadDelay (1 * 1000 * 1000)
+      runBuild docker newBuild
+
+-- *Tests
+
+testRunSuccess :: Docker.Service -> IO ()
+testRunSuccess docker = do
+  result <- runBuild docker testBuild
+  result.state `shouldBe` BuildFinished BuildSucceeded
+  Map.elems result.completedSteps `shouldBe` [StepSucceeded, StepSucceeded]
+
 main :: IO ()
-main = pure ()
+main = hspec do
+  docker <- runIO Docker.createService
+  describe "Turnstile" do
+    it "should run a successful build" do
+      testRunSuccess docker

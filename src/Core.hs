@@ -31,7 +31,7 @@ data Step
   {
     name :: StepName
     , image :: Docker.Image
-    , commands :: NonEmpty [Text]
+    , commands :: NonEmpty Text
   } deriving (Eq, Show)
 
 -- |A step result - contingent on return code; either successful or erroneous
@@ -106,14 +106,20 @@ buildHasNextStep build =
 
 -- |Given a Build, deterministically output the next state
 -- *State machine, produces side effects
-progress :: Build -> IO Build
-progress build =
+progress :: Docker.Service -> Build -> IO Build
+progress srv build =
   case build.state of
     BuildReady ->
       case buildHasNextStep build of
         Left result ->
           pure $ build { state = BuildFinished result }
         Right step -> do
+          -- create the container
+          let options = Docker.CreateContainerOptions step.image
+          container <- srv.createContainer options
+          srv.startContainer container
+
+          -- proceed by recursing the state machine
           let s = BuildRunningState { step = step.name }
           pure $ build { state = BuildRunning s }
 
