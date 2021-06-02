@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c8cd6357da9ffd4f5099a40023d346c7e1c882c1f705f2352c73cbb5a1ebd4a0
+-- hash: 888bd9b47021f2254f05f2f087c4434c89fa7a657c2b3eb4dacc0bf1b3e5ae4a
 
 name:           turnstile
 version:        0.1.0.0
@@ -30,6 +30,8 @@ source-repository head
 library
   exposed-modules:
       Core
+      Docker
+      SockIO
   other-modules:
       Paths_turnstile
   hs-source-dirs:
