@@ -14,6 +14,7 @@ import qualified RIO.List as List
 
 import qualified Docker
 
+
 -- *Pipeline Types
 
 -- |A Pipeline describes a sequence of ordered steps for a build
@@ -22,6 +23,7 @@ data Pipeline
   {
     steps :: NonEmpty Step
   } deriving (Eq, Show)
+
 
 -- *Pipeline Step Types
 
@@ -43,6 +45,7 @@ data StepResult
 newtype StepName = StepName Text
   -- ^We derive `Ord` so we can use as a map key
   deriving (Eq, Show, Ord)
+
 
 -- *Pipeline Build Types
 
@@ -75,6 +78,7 @@ data BuildResult
   | BuildFailed
   deriving (Eq, Show)
 
+
 -- *Helpers
 
 -- |Extract the text from a StepName
@@ -102,10 +106,11 @@ buildHasNextStep build =
     -- *Get next non-completed step i.e. not in the `completedSteps` map
     f step = not $ Map.member step.name build.completedSteps
 
+
 -- *State Machines
 
 -- |Given a Build, deterministically output the next state
--- *State machine, produces side effects
+-- |State machine, produces side effects
 progress :: Docker.Service -> Build -> IO Build
 progress srv build =
   case build.state of

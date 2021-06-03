@@ -4,11 +4,14 @@ import RIO
 import Test.Hspec
 import qualified RIO.Map as Map
 import qualified RIO.NonEmpty.Partial as Partial
+import qualified System.Process.Typed as Process
 
 import Core
 import qualified Docker
+import qualified Runner
 
--- Helpers
+
+-- *Helpers
 
 makeStep :: Text -> Text -> [Text] -> Step
 makeStep name image commands
@@ -23,22 +26,8 @@ makePipeline :: [Step] -> Pipeline
 makePipeline steps =
   Pipeline { steps = Partial.fromList steps }
 
--- |Setup
 
-testPipeline :: Pipeline
-testPipeline =
-  makePipeline [
-    makeStep "First step" "ubuntu" ["date"]
-    , makeStep "Second step" "ubuntu" ["uname -r"]
-  ]
-
-testBuild :: Build
-testBuild = Build
-  {
-    pipeline = testPipeline
-    , state = BuildReady
-    , completedSteps = mempty
-  }
+-- *Setup
 
 runBuild :: Docker.Service -> Build -> IO Build
 runBuild docker build = do
@@ -51,17 +40,40 @@ runBuild docker build = do
       threadDelay (1 * 1000 * 1000)
       runBuild docker newBuild
 
+
+-- *Setup + Teardown
+
+cleanDocker :: IO ()
+cleanDocker = void do
+  Process.readProcessStdout "docker rm -f $(docker ps -aq --filter \"label=turnstile\")"
+
+
 -- *Tests
 
-testRunSuccess :: Docker.Service -> IO ()
-testRunSuccess docker = do
-  result <- runBuild docker testBuild
+testRunSuccess :: Runner.Service -> IO ()
+testRunSuccess runner = do
+  build <- runner.prepareBuild $ makePipeline
+    [
+      makeStep "Step one" "ubuntu" ["date"]
+      , makeStep "Step two" "ubuntu" ["uname -r"]
+    ]
+  result <- runner.runBuild build
+
   result.state `shouldBe` BuildFinished BuildSucceeded
-  Map.elems result.completedSteps `shouldBe` [StepSucceeded, StepSucceeded]
+  Map.elems result.completedSteps `shouldBe`
+    [
+      StepSucceeded,
+      StepSucceeded
+    ]
+
+
+-- *Test Exec
 
 main :: IO ()
 main = hspec do
   docker <- runIO Docker.createService
-  describe "Turnstile" do
+  runner <- runIO $ Runner.createService docker
+
+  beforeAll cleanDocker $ describe "Turnstile" do
     it "should run a successful build" do
-      testRunSuccess docker
+      testRunSuccess runner
