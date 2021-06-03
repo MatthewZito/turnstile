@@ -62,10 +62,25 @@ testRunSuccess runner = do
   result.state `shouldBe` BuildFinished BuildSucceeded
   Map.elems result.completedSteps `shouldBe`
     [
-      StepSucceeded,
       StepSucceeded
+      , StepSucceeded
     ]
 
+testRunFailure :: Runner.Service -> IO ()
+testRunFailure runner = do
+  build <- runner.prepareBuild $ makePipeline
+    [
+      makeStep "Step one" "ubuntu" ["date"]
+      , makeStep "Step two" "ubuntu" ["exit 1"]
+    ]
+  result <- runner.runBuild build
+
+  result.state `shouldBe` BuildFinished BuildFailed
+  Map.elems result.completedSteps `shouldBe`
+    [
+      StepSucceeded
+      , StepFailed (Docker.ContainerReturnCode 1)
+    ]
 
 -- *Test Exec
 
@@ -77,3 +92,5 @@ main = hspec do
   beforeAll cleanDocker $ describe "Turnstile" do
     it "should run a successful build" do
       testRunSuccess runner
+    it "should run an errorenous build" do
+      testRunFailure runner

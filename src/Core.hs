@@ -20,9 +20,9 @@ import qualified Docker
 -- |A Pipeline describes a sequence of ordered steps for a build
 data Pipeline
   = Pipeline
-  {
-    steps :: NonEmpty Step
-  } deriving (Eq, Show)
+    {
+      steps :: NonEmpty Step
+    } deriving (Eq, Show)
 
 
 -- *Pipeline Step Types
@@ -30,11 +30,11 @@ data Pipeline
 -- |A single step in the BuildSteps sequence
 data Step
   = Step
-  {
-    name :: StepName
-    , image :: Docker.Image
-    , commands :: NonEmpty Text
-  } deriving (Eq, Show)
+    {
+      name :: StepName
+      , image :: Docker.Image
+      , commands :: NonEmpty Text
+    } deriving (Eq, Show)
 
 -- |A step result - contingent on return code; either successful or erroneous
 data StepResult
@@ -52,11 +52,11 @@ newtype StepName = StepName Text
 -- |Core Build type
 data Build
   = Build
-  {
-    pipeline :: Pipeline
-    , state :: BuildState
-    , completedSteps :: Map StepName StepResult
-  }
+    {
+      pipeline :: Pipeline
+      , state :: BuildState
+      , completedSteps :: Map StepName StepResult
+    }
 
 -- |The current build state, deterministic; state-machined
 data BuildState
@@ -68,14 +68,16 @@ data BuildState
 -- |Stores data about the current running step
 data BuildRunningState
   = BuildRunningState
-  {
-    step :: StepName
-  } deriving (Eq, Show)
+    {
+      step :: StepName
+      , container :: Docker.ContainerId
+    } deriving (Eq, Show)
 
 -- |Result of the build state sequence
 data BuildResult
   = BuildSucceeded
   | BuildFailed
+  | BuildUnexpectedState Text
   deriving (Eq, Show)
 
 
@@ -114,6 +116,8 @@ buildHasNextStep build =
 progress :: Docker.Service -> Build -> IO Build
 progress srv build =
   case build.state of
+
+
     BuildReady ->
       case buildHasNextStep build of
         Left result ->
@@ -125,18 +129,35 @@ progress srv build =
           srv.startContainer container
 
           -- proceed by recursing the state machine
-          let s = BuildRunningState { step = step.name }
+          let s = BuildRunningState
+                  {
+                    step = step.name
+                    , container = container
+                  }
+
           pure $ build { state = BuildRunning s }
 
-    BuildRunning state -> do
-      let return = Docker.ContainerReturnCode 0
-          result = returnCodeToStepResult return
 
-      pure build
-        {
-          state = BuildReady
-          , completedSteps
-            = Map.insert state.step result build.completedSteps
-        }
+    BuildRunning state -> do
+
+      status <- srv.containerStatus state.container
+
+      case status of
+        Docker.ContainerRunning ->
+          -- wait for the container to exit
+          pure build
+
+        Docker.ContainerExited ret -> do
+          let result = returnCodeToStepResult ret
+          pure build
+            {
+              state = BuildReady
+              , completedSteps = Map.insert state.step result build.completedSteps
+            }
+
+        Docker.ContainerOther other -> do
+          let result = BuildUnexpectedState other
+          pure build { state = BuildFinished result }
+
 
     BuildFinished _ -> undefined

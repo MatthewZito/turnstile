@@ -27,17 +27,25 @@ dockerSocketConn = "/var/run/docker.sock"
 -- |Docker container env options
 data CreateContainerOptions
   = CreateContainerOptions
-      {
-        image :: Image
-      }
+    {
+      image :: Image
+    }
 
 -- |Service type helper for dependency injection
 data Service
   = Service
-  {
-    createContainer :: CreateContainerOptions -> IO ContainerId
-    , startContainer :: ContainerId -> IO ()
-  }
+    {
+      createContainer :: CreateContainerOptions -> IO ContainerId
+      , startContainer :: ContainerId -> IO ()
+      , containerStatus :: ContainerId -> IO ContainerStatus
+    }
+
+-- |Tracks container status
+data ContainerStatus
+  = ContainerRunning
+  | ContainerExited ContainerReturnCode
+  | ContainerOther Text
+  deriving (Eq, Show)
 
 -- |Stores a Docker image name
 newtype Image = Image Text
@@ -50,6 +58,9 @@ newtype ContainerReturnCode = ContainerReturnCode Int
 -- |Stores a given Docker container's ID
 newtype ContainerId = ContainerId Text
   deriving (Eq, Show)
+
+-- |Initializes an HTTP request
+type RequestBuilder = Text -> HTTP.Request
 
 
 -- *Helpers
@@ -82,15 +93,24 @@ parseResponse res parser = do
 -- |Create a container service interface
 createService :: IO Service
 createService = do
+  manager <- SockIO.newManager dockerSocketConn
+
+  let newReq :: RequestBuilder
+      newReq path =
+        HTTP.defaultRequest
+        & HTTP.setRequestPath (encodeUtf8 $ "/v1.41" <> path)
+        & HTTP.setRequestManager manager
+
   pure Service
     {
-      createContainer = createContainer_
-      , startContainer = startContainer_
+      createContainer = createContainer_ newReq -- inject the request builder
+      , startContainer = startContainer_ newReq
+      , containerStatus = containerStatus_ newReq
     }
 
 -- |Create a Docker container via the Docker Engine API
-createContainer_ :: CreateContainerOptions -> IO ContainerId
-createContainer_ options = do
+createContainer_ :: RequestBuilder -> CreateContainerOptions -> IO ContainerId
+createContainer_ newReq options = do
   manager <- SockIO.newManager dockerSocketConn
 
   let image = imageToText options.image
@@ -103,10 +123,7 @@ createContainer_ options = do
               , ("Entrypoint", Aeson.toJSON [Aeson.String "/bin/sh", "-c"])
             ]
 
-  let req = HTTP.defaultRequest
-            & HTTP.setRequestManager manager
-            & HTTP.setRequestHost "localhost"
-            & HTTP.setRequestPath "/v1.41/containers/create"
+  let req = newReq "/containers/create"
             & HTTP.setRequestMethod "POST"
             & HTTP.setRequestBodyJSON body
 
@@ -120,16 +137,29 @@ createContainer_ options = do
   -- traceShowIO res
 
 -- |Start a Docker container via the Docker Engine API
-startContainer_ :: ContainerId -> IO ()
-startContainer_ container = do
-  manager <- SockIO.newManager dockerSocketConn
+startContainer_ :: RequestBuilder -> ContainerId -> IO ()
+startContainer_ newReq container = do
+  let path = "/containers/" <> containerIdToText container <> "/start"
 
-  let path = "/v1.41/containers/" <> containerIdToText container <> "/start"
-
-  let req = HTTP.defaultRequest
-          & HTTP.setRequestManager manager
-          & HTTP.setRequestHost "localhost"
-          & HTTP.setRequestPath (encodeUtf8 path)
-          & HTTP.setRequestMethod "POST"
+  let req = newReq path
+            & HTTP.setRequestMethod "POST"
 
   void $ HTTP.httpBS req
+
+-- |Resolve the status of a given container
+containerStatus_ :: RequestBuilder -> ContainerId -> IO ContainerStatus
+containerStatus_ newReq container = do
+  let parser = Aeson.withObject "container-inspect" $ \o -> do
+      state <- o .: "State"
+      status <- state .: "Status"
+      case status of
+        "running" -> pure ContainerRunning
+        "exited" -> do
+          code <- state .: "ExitCode"
+          pure $ ContainerExited (ContainerReturnCode code)
+        other -> pure $ ContainerOther other
+
+  let req = newReq $ "/containers/" <> containerIdToText container <> "/json"
+
+  res <- HTTP.httpBS req
+  parseResponse res parser
