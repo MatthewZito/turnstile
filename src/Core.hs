@@ -9,13 +9,18 @@ Portability : POSIX
 module Core where
 
 import RIO
+
 import qualified RIO.Map as Map
 import qualified RIO.List as List
+import qualified RIO.Text as Text
+import qualified RIO.NonEmpty as NonEmpty
 
 import qualified Docker
 
 
+
 -- *Pipeline Types
+
 
 -- |A Pipeline describes a sequence of ordered steps for a build
 data Pipeline
@@ -25,7 +30,9 @@ data Pipeline
     } deriving (Eq, Show)
 
 
+
 -- *Pipeline Step Types
+
 
 -- |A single step in the BuildSteps sequence
 data Step
@@ -35,6 +42,7 @@ data Step
       , image :: Docker.Image
       , commands :: NonEmpty Text
     } deriving (Eq, Show)
+
 
 -- |A step result - contingent on return code; either successful or erroneous
 data StepResult
@@ -47,7 +55,9 @@ newtype StepName = StepName Text
   deriving (Eq, Show, Ord)
 
 
+
 -- *Pipeline Build Types
+
 
 -- |Core Build type
 data Build
@@ -56,7 +66,9 @@ data Build
       pipeline :: Pipeline
       , state :: BuildState
       , completedSteps :: Map StepName StepResult
-    }
+      , volume :: Docker.Volume
+    } deriving (Eq, Show)
+
 
 -- |The current build state, deterministic; state-machined
 data BuildState
@@ -64,6 +76,7 @@ data BuildState
   | BuildRunning BuildRunningState
   | BuildFinished BuildResult
   deriving (Eq, Show)
+
 
 -- |Stores data about the current running step
 data BuildRunningState
@@ -73,6 +86,7 @@ data BuildRunningState
       , container :: Docker.ContainerId
     } deriving (Eq, Show)
 
+
 -- |Result of the build state sequence
 data BuildResult
   = BuildSucceeded
@@ -81,11 +95,14 @@ data BuildResult
   deriving (Eq, Show)
 
 
+
 -- *Helpers
+
 
 -- |Extract the text from a StepName
 stepNameToText :: StepName -> Text
 stepNameToText ( StepName step) = step
+
 
 -- |Determine the StepResult contingent on the ContainerReturnCode
 returnCodeToStepResult :: Docker.ContainerReturnCode -> StepResult
@@ -93,6 +110,7 @@ returnCodeToStepResult rc =
   if Docker.returnCodeToInt rc == 0
     then StepSucceeded
     else StepFailed rc
+
 
 -- |Determine if we've another BuildStep to process
 buildHasNextStep :: Build -> Either BuildResult Step
@@ -109,7 +127,9 @@ buildHasNextStep build =
     f step = not $ Map.member step.name build.completedSteps
 
 
+
 -- *State Machines
+
 
 -- |Given a Build, deterministically output the next state
 -- |State machine, produces side effects
@@ -117,14 +137,23 @@ progress :: Docker.Service -> Build -> IO Build
 progress srv build =
   case build.state of
 
-
     BuildReady ->
       case buildHasNextStep build of
         Left result ->
           pure $ build { state = BuildFinished result }
         Right step -> do
+          let script = Text.unlines
+                $ ["set -ex"] <> NonEmpty.toList step.commands
           -- create the container
-          let options = Docker.CreateContainerOptions step.image
+          let options =
+                Docker.CreateContainerOptions
+                  {
+                    image = step.image
+                    , script = script
+                    , volume = build.volume
+                  }
+
+          srv.pullImage step.image
           container <- srv.createContainer options
           srv.startContainer container
 
@@ -136,7 +165,6 @@ progress srv build =
                   }
 
           pure $ build { state = BuildRunning s }
-
 
     BuildRunning state -> do
 
@@ -158,6 +186,5 @@ progress srv build =
         Docker.ContainerOther other -> do
           let result = BuildUnexpectedState other
           pure build { state = BuildFinished result }
-
 
     BuildFinished _ -> undefined

@@ -18,6 +18,7 @@ import qualified Network.HTTP.Client.Internal as Client.Internal
 import qualified Network.Socket as Sock
 import qualified Network.Socket.ByteString as SockB
 
+
 -- |Socket manager interface for `Network.HTTP`
 newManager :: FilePath -> IO Client.Manager
 newManager fp =
