@@ -174,7 +174,7 @@ main = hspec do
   beforeAll cleanDocker $ describe "Turnstile" do
     it "should run a successful build" do
       testRunSuccess runner
-    it "should run an errorenous build" do
+    it "should run an erroneous build" do
       testRunFailure runner
     it "should share a workspace among steps" do
       testSharedWorkspace docker runner
