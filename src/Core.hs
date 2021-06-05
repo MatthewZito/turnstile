@@ -14,6 +14,7 @@ import qualified RIO.Map as Map
 import qualified RIO.List as List
 import qualified RIO.Text as Text
 import qualified RIO.NonEmpty as NonEmpty
+import qualified Data.Aeson as Aeson
 
 import qualified Docker
 
@@ -27,7 +28,7 @@ data Pipeline
   = Pipeline
     {
       steps :: NonEmpty Step
-    } deriving (Eq, Show)
+    } deriving (Eq, Show, Generic, Aeson.FromJSON)
 
 
 
@@ -41,7 +42,7 @@ data Step
       name :: StepName
       , image :: Docker.Image
       , commands :: NonEmpty Text
-    } deriving (Eq, Show)
+    } deriving (Eq, Show, Generic, Aeson.FromJSON)
 
 
 -- |A step result - contingent on return code; either successful or erroneous
@@ -52,7 +53,7 @@ data StepResult
 
 newtype StepName = StepName Text
   -- ^We derive `Ord` so we can use as a map key
-  deriving (Eq, Show, Ord)
+  deriving (Eq, Show, Ord, Generic, Aeson.FromJSON)
 
 
 

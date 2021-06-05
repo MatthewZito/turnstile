@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 41f22460c30fc024723a05b5f900d1272e2266f2360a71e1c73aadbf52b116f1
+-- hash: 69c901f9628a02fb261a7c6b965744b769869befa7567ef4877890008d952052
 
 name:           turnstile
 version:        0.1.0.0
@@ -32,6 +32,7 @@ library
       Core
       Docker
       Logger
+      Parser
       Runner
       SockIO
   other-modules:

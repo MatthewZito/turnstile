@@ -2,13 +2,15 @@ module Main where
 
 import RIO
 import Test.Hspec
+
 import qualified RIO.Map as Map
 import qualified RIO.NonEmpty.Partial as Partial
 import qualified RIO.ByteString as ByteString
-import qualified System.Process.Typed as Process
 import qualified RIO.Set as Set
+import qualified Data.Yaml as Yaml
+import qualified System.Process.Typed as Process
 
-import Core
+import qualified Core
 import qualified Docker
 import qualified Runner
 import qualified Logger
@@ -18,19 +20,19 @@ import qualified Logger
 -- *Helpers
 
 
-makeStep :: Text -> Text -> [Text] -> Step
+makeStep :: Text -> Text -> [Text] -> Core.Step
 makeStep name image commands
-  = Step
+  = Core.Step
   {
-    name = StepName name
+    name = Core.StepName name
     , image = Docker.Image { name = image, tag = "latest" }
     , commands = Partial.fromList commands
   }
 
 
-makePipeline :: [Step] -> Pipeline
+makePipeline :: [Core.Step] -> Core.Pipeline
 makePipeline steps =
-  Pipeline { steps = Partial.fromList steps }
+  Core.Pipeline { steps = Partial.fromList steps }
 
 
 emptyHooks :: Runner.Hooks
@@ -45,11 +47,11 @@ emptyHooks =
 -- *Setup + Teardown
 
 
-runBuild :: Docker.Service -> Build -> IO Build
+runBuild :: Docker.Service -> Core.Build -> IO Core.Build
 runBuild docker build = do
   newBuild <- Core.progress docker build
   case newBuild.state of
-    BuildFinished _ ->
+    Core.BuildFinished _ ->
       pure newBuild
     _ -> do
       -- recurse until we've reached a `BuildFinished` state
@@ -76,8 +78,8 @@ testRunSuccess runner = do
     ]
   result <- runner.runBuild emptyHooks build
 
-  result.state `shouldBe` BuildFinished BuildSucceeded
-  Map.elems result.completedSteps `shouldBe` [StepSucceeded, StepSucceeded]
+  result.state `shouldBe` Core.BuildFinished Core.BuildSucceeded
+  Map.elems result.completedSteps `shouldBe` [Core.StepSucceeded, Core.StepSucceeded]
 
 
 testRunFailure :: Runner.Service -> IO ()
@@ -89,8 +91,8 @@ testRunFailure runner = do
     ]
   result <- runner.runBuild emptyHooks build
 
-  result.state `shouldBe` BuildFinished BuildFailed
-  Map.elems result.completedSteps `shouldBe` [StepSucceeded, StepFailed (Docker.ContainerReturnCode 1)]
+  result.state `shouldBe` Core.BuildFinished Core.BuildFailed
+  Map.elems result.completedSteps `shouldBe` [Core.StepSucceeded, Core.StepFailed (Docker.ContainerReturnCode 1)]
 
 
 testSharedWorkspace :: Docker.Service -> Runner.Service -> IO ()
@@ -102,8 +104,8 @@ testSharedWorkspace docker runner = do
         ]
 
   result <- runner.runBuild emptyHooks build
-  result.state `shouldBe` BuildFinished BuildSucceeded
-  Map.elems result.completedSteps `shouldBe` [StepSucceeded, StepSucceeded]
+  result.state `shouldBe` Core.BuildFinished Core.BuildSucceeded
+  Map.elems result.completedSteps `shouldBe` [Core.StepSucceeded, Core.StepSucceeded]
 
 
 testLogCollection :: Runner.Service -> IO ()
@@ -134,8 +136,8 @@ testLogCollection runner = do
       , makeStep "Echo Linux" "ubuntu" ["uname -s"]
     ]
   result <- runner.runBuild hooks build
-  result.state `shouldBe` BuildFinished BuildSucceeded
-  Map.elems result.completedSteps `shouldBe` [StepSucceeded, StepSucceeded]
+  result.state `shouldBe` Core.BuildFinished Core.BuildSucceeded
+  Map.elems result.completedSteps `shouldBe` [Core.StepSucceeded, Core.StepSucceeded]
 
   readMVar expected >>= \logs -> logs `shouldBe` Set.empty
 
@@ -149,8 +151,16 @@ testImagePull runner = do
 
   result <- runner.runBuild emptyHooks build
 
-  result.state `shouldBe` BuildFinished BuildSucceeded
-  Map.elems result.completedSteps `shouldBe` [StepSucceeded]
+  result.state `shouldBe` Core.BuildFinished Core.BuildSucceeded
+  Map.elems result.completedSteps `shouldBe` [Core.StepSucceeded]
+
+
+testYamlDecoding :: Runner.Service -> IO ()
+testYamlDecoding runner = do
+  pipeline <- Yaml.decodeFileThrow "test/artifacts/pipeline.yml"
+  build <- runner.prepareBuild pipeline
+  result <- runner.runBuild emptyHooks build
+  result.state `shouldBe` Core.BuildFinished Core.BuildSucceeded
 
 
 
